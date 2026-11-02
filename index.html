@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trace4D</title>
+<meta name="description" content="Trace4D: grounding video reasoning in predicted 4D state changes and temporal visual evidence.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single centered reading column (≈ 72ch) with wide figure bands; sticky section nav */
+:root {
+  --bg: #fbfcfd;
+  --surface: #eef3f7;
+  --fg: #14212c;
+  --muted: #566573;
+  --line: #d5dee6;
+  --accent: #0b7fb8;      /* Trace4D sky-blue, darkened for text contrast */
+  --accent-soft: #dcf0fa;
+  --change: #d9661f;      /* state-change orange (referee in teaser) */
+  --ground: #2f8a4b;      /* grounded reasoning green */
+  --hl-row: #e6f4fb;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --measure: 72ch;
+  --wide: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161d; --surface: #16222c; --fg: #e3ebf1; --muted: #9aabb9; --line: #2a3a47;
+    --accent: #5cc3f0; --accent-soft: #143246; --change: #f08a4b; --ground: #5cc27a; --hl-row: #13303f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161d; --surface: #16222c; --fg: #e3ebf1; --muted: #9aabb9; --line: #2a3a47;
+  --accent: #5cc3f0; --accent-soft: #143246; --change: #f08a4b; --ground: #5cc27a; --hl-row: #13303f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+img { max-width: 100%; height: auto; display: block; }
+
+.wrap {
+  max-width: var(--wide); margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.prose { max-width: var(--measure); margin: 0 auto; }
+
+/* ---------- header ---------- */
+header.hero { padding-block: 56px 28px; text-align: center; }
+.venue {
+  display: inline-block; font-family: var(--font-mono); font-size: 13px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent);
+  padding: 3px 12px; border-radius: 999px;
+}
+h1 {
+  font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+  font-size: clamp(2.6rem, 7vw, 4.4rem); line-height: 1; margin: 18px 0 8px;
+}
+h1 .four { color: var(--accent); }
+.subtitle {
+  font-family: var(--font-display); font-weight: 500; font-size: clamp(1.15rem, 2.6vw, 1.55rem);
+  line-height: 1.3; max-width: 34em; margin: 0 auto; text-wrap: balance;
+}
+.authors { margin: 26px auto 4px; font-size: 1.05rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
+.authors a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line); }
+.affil { color: var(--muted); font-size: .95rem; }
+.buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 999px;
+  background: var(--fg); color: var(--bg); text-decoration: none; font-weight: 500; font-size: .95rem;
+}
+.btn svg { width: 16px; height: 16px; fill: currentColor; }
+.btn.soon { background: transparent; color: var(--muted); border: 1px dashed var(--line); cursor: default; }
+
+
+/* ---------- nav ---------- */
+nav.toc {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px);
+  border-block: 1px solid var(--line);
+}
+nav.toc ul {
+  list-style: none; margin: 0 auto; padding: 0; display: flex; gap: 22px; overflow-x: auto;
+  scrollbar-width: none; max-width: var(--wide);
+}
+nav.toc li { flex: none; }
+nav.toc a { display: block; padding: 11px 0; color: var(--muted); text-decoration: none; font-size: .9rem; font-weight: 500; }
+nav.toc a:hover { color: var(--fg); }
+
+/* ---------- sections ---------- */
+section { padding-block: 56px 8px; scroll-margin-top: 48px; }
+h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 3.5vw, 2.1rem);
+  letter-spacing: -0.01em; line-height: 1.15; margin: 0 0 18px; text-wrap: balance;
+}
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; margin: 34px 0 10px; text-wrap: balance; }
+.eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+p { margin: 0 0 14px; }
+figure { margin: 26px 0 0; }
+figure img { border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+figure.fig { max-width: 880px; margin-left: auto; margin-right: auto; }
+figcaption { color: var(--muted); font-size: 1rem; margin: 10px auto 0; max-width: var(--measure); text-align: center; }
+figcaption b { color: var(--fg); }
+
+.tldr {
+  background: var(--accent-soft); border-radius: 12px; padding: 20px 24px; font-size: 1.05rem;
+}
+.tldr b { color: var(--accent); }
+
+/* stat strip */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
+.stat { border-top: 2px solid var(--fg); padding-top: 10px; }
+.stat .num { font-family: var(--font-display); font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.stat .lbl { color: var(--muted); font-size: .88rem; line-height: 1.4; margin-top: 4px; }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* CoT three parts */
+.cot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.cot .part { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.cot .tag { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+.cot .part:nth-child(1) .tag { color: var(--accent); }
+.cot .part:nth-child(2) .tag { color: var(--change); }
+.cot .part:nth-child(3) .tag { color: var(--ground); }
+.cot h4 { margin: 6px 0 6px; font-size: 1rem; }
+.cot p { font-size: .94rem; color: var(--muted); margin: 0; }
+@media (max-width: 760px) { .cot { grid-template-columns: minmax(0, 1fr); } }
+
+/* full response, colored like the three CoT parts */
+.resp { margin-top: 22px; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; min-width: 0; }
+.resp-q { margin: 6px 0 6px; font-weight: 500; }
+.resp-opts { list-style: none; margin: 0; padding: 0; font-size: .92rem; color: var(--muted); display: grid; gap: 2px; }
+.resp-opts li.ok { color: var(--ground); font-weight: 600; }
+.rseg { border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 7%, var(--bg)); border-radius: 0 8px 8px 0; padding: 10px 14px; min-width: 0; }
+.rseg .tag { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--c); }
+.rseg p { margin: 4px 0 0; font-size: .95rem; }
+.rseg pre { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; overflow-x: auto; }
+.rseg.s4d { --c: var(--accent); }
+.rseg.vis { --c: var(--change); }
+.rseg.rea { --c: var(--ground); }
+.rseg.ans { --c: var(--ground); }
+.rseg.ans b { color: var(--ground); font-size: 1.05rem; padding: 0 2px; }
+.resp .ell { display: none; }
+.resp.collapsed .ell { display: inline; color: var(--muted); }
+.resp.collapsed .mid { display: none; }
+.resp.collapsed .rseg.vis p, .resp.collapsed .rseg.rea p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.more { justify-self: start; font: inherit; font-size: .9rem; font-weight: 500; color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+
+
+/* text + figure side by side */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: center; }
+.split .prose { margin: 0; }
+.split figure { margin-top: 0; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+/* tables */
+.tbl { overflow-x: auto; margin-top: 18px; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--surface); }
+td:first-child, th:first-child { text-align: left; position: sticky; left: 0; background: var(--bg); }
+th:first-child { background: var(--surface); }
+tr.grp td { background: var(--surface); color: var(--muted); font-style: italic; text-align: left; font-size: .82rem; }
+tr.grp td:first-child { background: var(--surface); }
+tr.ours td { background: var(--hl-row); font-weight: 600; }
+tr.ours td:first-child { background: var(--hl-row); }
+td.avg, th.avg { background: color-mix(in srgb, var(--surface) 60%, transparent); }
+b.best { color: var(--accent); }
+u.second { text-decoration-color: var(--accent); text-underline-offset: 3px; }
+tbody tr:last-child td { border-bottom: 0; }
+details.full { margin-top: 14px; }
+details.full summary { cursor: pointer; color: var(--accent); font-weight: 500; font-size: .95rem; }
+
+.mini { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.mini > div { min-width: 0; }
+@media (max-width: 760px) { .mini { grid-template-columns: minmax(0, 1fr); } }
+.note { color: var(--muted); font-size: .92rem; margin-top: 10px; }
+
+/* bibtex */
+.bib { position: relative; }
+.bib pre {
+  font-family: var(--font-mono); font-size: 13px; background: var(--surface); border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; margin: 0;
+}
+.copy {
+  position: absolute; top: 10px; right: 10px; font: inherit; font-size: .82rem; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 4px 10px;
+}
+
+
+/* video gallery */
+.clip-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 22px; align-items: center; margin-top: 28px; }
+.clip-hero video { width: 100%; border-radius: 10px; background: #000; display: block; aspect-ratio: 16 / 9; object-fit: contain; }
+@media (max-width: 760px) { .clip-hero { grid-template-columns: minmax(0, 1fr); } }
+.coords { margin-top: 14px; }
+.coords td { font-family: var(--font-mono); font-size: .8rem; }
+.coords th.who-boxer { color: #3b82c4; }
+.coords th.who-referee { color: #e0803a; }
+.vgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+@media (max-width: 960px) { .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .vgrid { grid-template-columns: minmax(0, 1fr); } }
+.vcard { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.vcard video { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; display: block; }
+.vcard .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.vcard .kind { font-family: var(--font-mono); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.vcard .q { font-weight: 500; font-size: .95rem; line-height: 1.45; }
+.vcard .ans { font-size: .9rem; }
+.vcard .ans b { color: var(--ground); }
+.vcard .tr { margin-top: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--surface); border-radius: 8px; padding: 8px 10px; color: var(--fg); overflow-wrap: anywhere; }
+.vcard .tr span { color: var(--change); }
+
+footer { padding-block: 56px 40px; color: var(--muted); font-size: .85rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <span class="venue">arXiv</span>
+  <h1>Trace<span class="four">4D</span></h1>
+  <p class="subtitle">Grounding Video Reasoning in Predicted 4D State Changes and Temporal Visual Evidence</p>
+
+  <div class="authors">
+    <span>Wooseok Jang<sup>1</sup></span>
+    <span>Seungryong Kim<sup>1</sup></span>
+    <span>Yan Lu<sup>2</sup></span>
+    <span>Lei Ji<sup>2</sup></span>
+  </div>
+  <div class="affil"><sup>1</sup>KAIST AI &nbsp;·&nbsp; <sup>2</sup>Microsoft Research Asia</div>
+
+  <div class="buttons">
+    <!-- TODO: set hrefs and remove class="soon" -->
+    <a class="btn soon" href="#" aria-disabled="true"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3.5V8h4.5"/></svg>Paper</a>
+    <a class="btn soon" href="#" aria-disabled="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z M7 8h10v2H7zm0 4h10v2H7z"/></svg>arXiv</a>
+    <a class="btn soon" href="#" aria-disabled="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>Code</a>
+    <a class="btn soon" href="#" aria-disabled="true"><svg viewBox="0 0 24 24"><path d="M12 3c4.4 0 8 1.3 8 3v12c0 1.7-3.6 3-8 3s-8-1.3-8-3V6c0-1.7 3.6-3 8-3zm0 2C8 5 6 6 6 6.2S8 7.5 12 7.5 18 6.4 18 6.2 16 5 12 5z"/></svg>Data</a>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#videos">Videos</a></li>
+      <li><a href="#method">Method</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#citation">Citation</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section id="overview" class="wrap">
+    <div class="prose">
+      <p class="tldr"><b>TL;DR.</b> Trace4D teaches a VLM to first write down where things are at each annotated frame, as a <b>4D state sequence</b> of 2D boxes and 3D centroids, and then reason over how those states change, checking each change against what is visible in the video before answering.</p>
+    </div>
+    <div class="clip-hero">
+      <video src="static/videos/boxer.mp4" poster="static/videos/boxer.jpg" autoplay muted loop playsinline aria-label="Boxer and referee clip from Trace4D-Bench"></video>
+      <div class="prose" style="margin:0">
+        <div class="eyebrow">Example</div>
+        <p style="margin:0">Trace4D predicts where the boxer and the referee are at five annotated frames. Its reasoning puts their centroid distance at about 0.27 at frame 0, 0.11 at frame 8, and 0.17 at frame 31. It matches this to the visible approach and the later separation and answers <b>B</b>: closer together, then farther apart. Qwen3-VL and MLLM-4D both answer wrong.</p>
+        <div class="tbl coords">
+          <table>
+            <thead><tr><th>Frame</th><th class="who-boxer">Boxer (x, y, z)</th><th class="who-referee">Referee (x, y, z)</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>(&minus;0.05, &minus;0.01, 1.00)</td><td>(&minus;0.16, 0.01, 0.75)</td></tr>
+              <tr><td>8</td><td>(&minus;0.01, 0.04, 0.92)</td><td>(&minus;0.04, 0.02, 0.82)</td></tr>
+              <tr><td>16</td><td>(&minus;0.05, 0.02, 0.89)</td><td>(0.01, 0.02, 0.80)</td></tr>
+              <tr><td>23</td><td>(&minus;0.11, 0.02, 0.86)</td><td>(0.03, 0.03, 0.79)</td></tr>
+              <tr><td>31</td><td>(&minus;0.16, 0.04, 0.82)</td><td>(0.01, 0.02, 0.79)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note" style="margin:10px 0 0">Predicted 3D centroids in the camera frame at each timestep (x right, y down, z forward). Boxes in the video are the predicted <code>bbox_2d</code>, interpolated between annotated frames.</p>
+      </div>
+    </div>
+    <div class="stats prose" style="max-width: var(--wide)">
+      <div class="stat"><div class="num">79.25</div><div class="lbl">Trace4D-Bench overall (4B), vs 38.92 for the Qwen3-VL-4B-Instruct base model</div></div>
+      <div class="stat"><div class="num">64.32</div><div class="lbl">VLM4D accuracy (4B), the best non-proprietary model evaluated</div></div>
+      <div class="stat"><div class="num">600K</div><div class="lbl">4D perception examples from about 362K in-the-wild clips</div></div>
+      <div class="stat"><div class="num">69,331</div><div class="lbl">grounded QA examples with 4D-grounded CoT supervision</div></div>
+    </div>
+  </section>
+
+  <section id="abstract" class="wrap">
+    <div class="prose">
+      <h2>Abstract</h2>
+      <p>Understanding how objects and their spatial relationships evolve over time remains challenging for vision-language models (VLMs), particularly under changing viewpoints. Recent approaches incorporate explicit 4D information into model responses, but how this information supports the final answer can remain implicit. We present <b>Trace4D</b>, a framework that trains VLMs to use predicted 4D state changes and temporal visual observations as joint evidence for video reasoning. Its 4D-grounded chain-of-thought (CoT) consists of a structured 4D state sequence, temporal visual analysis, and 4D-grounded reasoning that connects state changes to observations of the same targets over matching intervals and explains how they support the answer. From in-the-wild videos, we construct Trace4D-Train with 600K 4D perception examples and approximately 70K grounded question–answer (QA) examples with 4D-grounded CoT supervision. Joint supervised fine-tuning learns state prediction and grounded reasoning together, followed by geometry-aware GRPO that refines responses using answer correctness and reference 4D state agreement. At inference, Trace4D predicts its own 4D states and reasoning from video, without reference annotations or an external geometric model. Experiments on our held-out Trace4D-Bench and the external VLM4D benchmark show improved QA accuracy over the base VLMs and demonstrate the benefit of combining 4D state changes with temporal visual evidence.</p>
+    </div>
+  </section>
+
+
+  <section id="videos" class="wrap">
+    <div class="prose" style="max-width: var(--wide)">
+      <div class="eyebrow">Videos</div>
+      <h2>Trace4D on held-out clips</h2>
+      <p>Each clip is shown with its question, Trace4D's answer, and the predicted 4D values the reasoning cites. All Trace4D-Bench clips come from source videos excluded from training.</p>
+    </div>
+    <div class="vgrid">
+      <article class="vcard">
+        <video src="static/videos/dog.mp4" poster="static/videos/dog.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Following the camera, how does the distance between the dog and the camera change?"></video>
+        <div class="body">
+          <div class="kind">Trace4D-Bench · Relative · Distance to camera</div>
+          <div class="q">Following the camera, how does the distance between the dog and the camera change?</div>
+          <div class="ans">Trace4D: <b>B.</b> It stays about the same distance, then moves farther from the camera.</div>
+          <div class="tr">dist(cam) 1.02 <span>f0–9</span> → 1.30 → 1.60 → 1.81 → 2.12 <span>f31</span></div>
+        </div>
+      </article>
+      <article class="vcard">
+        <video src="static/videos/guinea.mp4" poster="static/videos/guinea.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Following the camera, how does the direction from the camera to the guinea pig change?"></video>
+        <div class="body">
+          <div class="kind">Trace4D-Bench · Relative · Direction from camera</div>
+          <div class="q">Following the camera, how does the direction from the camera to the guinea pig change?</div>
+          <div class="ans">Trace4D: <b>B.</b> It is to the front-left, then to the front.</div>
+          <div class="tr">x −0.351 <span>f0</span> → −0.181 → −0.006 → 0.019 <span>f31</span>, z ≈ 1.06</div>
+        </div>
+      </article>
+      <article class="vcard">
+        <video src="static/videos/labrador.mp4" poster="static/videos/labrador.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Anchored to frame 27, compare the speed between the white dog and the labrador."></video>
+        <div class="body">
+          <div class="kind">Trace4D-Bench · Absolute · Speed comparison</div>
+          <div class="q">Anchored to frame 27, compare the speed between the white dog and the labrador.</div>
+          <div class="ans">Trace4D: <b>B.</b> They move at a similar speed, then the second is faster.</div>
+          <div class="tr">f27–31 step: white dog 0.000 vs labrador 0.118 <span>(z 0.979 → 0.869)</span></div>
+        </div>
+      </article>
+      <article class="vcard">
+        <video src="static/videos/wrap.mp4" poster="static/videos/wrap.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Anchored to frame 0, how does the distance between the plastic wrap and the anchor camera change?"></video>
+        <div class="body">
+          <div class="kind">Trace4D-Bench · Absolute · Distance to anchor camera</div>
+          <div class="q">Anchored to frame 0, how does the distance between the plastic wrap and the anchor camera change?</div>
+          <div class="ans">Trace4D: <b>A.</b> It moves farther from the camera, then stays about the same distance.</div>
+          <div class="tr">dist 1.00 <span>f0</span> → 1.38 <span>f4</span> → ≈1.38 … 1.37 <span>f31</span></div>
+        </div>
+      </article>
+      <article class="vcard">
+        <video src="static/videos/robot.mp4" poster="static/videos/robot.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Which direction did the robot arm move?"></video>
+        <div class="body">
+          <div class="kind">VLM4D · Synthetic</div>
+          <div class="q">Which direction did the robot arm move?</div>
+          <div class="ans">Trace4D: <b>D.</b> right</div>
+          <div class="tr">x −0.044 <span>f0</span> → 0.099 → 0.180 → 0.262 → 0.374 <span>f31</span>; cam ≈ 0</div>
+        </div>
+      </article>
+      <article class="vcard">
+        <video src="static/videos/swan.mp4" poster="static/videos/swan.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Is the swan swimming forwards or backwards from its own perspective?"></video>
+        <div class="body">
+          <div class="kind">VLM4D · Real (DAVIS)</div>
+          <div class="q">Is the swan swimming forwards or backwards from its own perspective?</div>
+          <div class="ans">Trace4D: <b>D.</b> forwards</div>
+          <div class="tr">x −0.076 <span>f0</span> → 0.009 → 0.081 → 0.151 → 0.223 <span>f31</span>; cam ≈ 0</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="method" class="wrap">
+    <div class="prose">
+      <div class="eyebrow">Method</div>
+      <h2>A response that shows its geometry</h2>
+      <p>Every Trace4D answer is generated as <code>y = [s; o; r; a]</code>: the model writes its own 4D state sequence, describes what it sees phase by phase, links the two, and only then answers. The predicted states stay in context, so later reasoning can cite exact positions and their changes.</p>
+    </div>
+
+    <div class="cot">
+      <div class="part">
+        <span class="tag">&lt;4d&gt; · s</span>
+        <h4>Structured 4D state sequence</h4>
+        <p>For each annotated frame, every queried entity gets a label, a normalized 2D box, and a 3D centroid. The camera appears as <code>cam</code> when the question needs it.</p>
+      </div>
+      <div class="part">
+        <span class="tag">&lt;visual&gt; · o</span>
+        <h4>Temporal visual analysis</h4>
+        <p>Question-relevant observations across temporal phases: actions, interactions, and occlusions that geometry alone does not capture.</p>
+      </div>
+      <div class="part">
+        <span class="tag">reasoning · r → answer · a</span>
+        <h4>4D-grounded reasoning</h4>
+        <p>Each visual observation is tied to the matching state change for the same target, interval, and coordinate frame, then used to justify the option.</p>
+      </div>
+    </div>
+
+    <div class="resp collapsed" id="resp" aria-label="Full Trace4D response for the boxer and referee clip">
+      <div class="resp-head">
+        <div class="eyebrow">Full response · boxer–referee clip from the overview · Trace4D</div>
+        <p class="resp-q"><b>Q.</b> Following the camera, how does the distance between the boxer with initial bounding box [281,127,504,888] and the referee change?</p>
+        <ul class="resp-opts"><li><b>A.</b> They stay about the same distance apart, then move closer together.</li><li class="ok"><b>B.</b> They move closer together, then move farther apart.</li><li><b>C.</b> They move farther apart, then stay about the same distance apart.</li><li><b>D.</b> They move farther apart, then move closer together.</li></ul>
+      </div>
+      <div class="rseg s4d"><span class="tag">&lt;4d&gt; · s</span><pre>[{"frame": 0, "entities": [
+   {"label": "boxer", "bbox_2d": [281, 128, 505, 889], "centroid": [-0.05, -0.009, 1.0]},
+   {"label": "referee", "bbox_2d": [0, 128, 208, 997], "centroid": [-0.161, 0.011, 0.751]}]},
+<span class="ell"> …
+</span><span class="mid"> {"frame": 8, "entities": [
+   {"label": "boxer", "bbox_2d": [423, 200, 517, 997], "centroid": [-0.013, 0.036, 0.917]},
+   {"label": "referee", "bbox_2d": [309, 175, 473, 997], "centroid": [-0.041, 0.018, 0.819]}]},
+ {"frame": 16, "entities": [
+   {"label": "boxer", "bbox_2d": [302, 183, 447, 997], "centroid": [-0.047, 0.024, 0.887]},
+   {"label": "referee", "bbox_2d": [375, 178, 595, 997], "centroid": [0.005, 0.022, 0.801]}]},
+ {"frame": 23, "entities": [
+   {"label": "boxer", "bbox_2d": [83, 189, 325, 997], "centroid": [-0.108, 0.019, 0.856]},
+   {"label": "referee", "bbox_2d": [525, 172, 658, 997], "centroid": [0.032, 0.025, 0.787]}]},
+</span> {"frame": 31, "entities": [
+   {"label": "boxer", "bbox_2d": [0, 469, 158, 997], "centroid": [-0.161, 0.043, 0.819]},
+   {"label": "referee", "bbox_2d": [408, 161, 603, 997], "centroid": [0.008, 0.021, 0.791]}]}]</pre></div>
+      <div class="rseg vis"><span class="tag">&lt;visual&gt; · o</span><p>At first, the boxer and referee are close together near the left side of the ring, with the referee reaching toward the boxer and their silhouettes partly overlapping. As they walk leftward, the referee remains immediately beside the boxer, so the visible gap stays small and changes only slightly through the middle of the clip. In the later phase, the boxer continues toward the left edge while the referee stays nearer the center, producing a clear increase in their separation. They never make contact again, and the referee’s arm remains extended toward the boxer without occluding the growing gap; the camera follows the action, but the ring ropes and corner post still show their increasing separation.</p></div>
+      <div class="rseg rea"><span class="tag">reasoning · r</span><p>During the initial close phase, the visible overlap and small gap correspond to a centroid distance of about 0.27 at frame 0, which falls to about 0.11 at frame 8. During the middle phase, they remain visibly adjacent while walking, and the 4D distance stays near 0.11 at frame 16 and 0.15 at frame 23, indicating only modest fluctuation rather than a sustained change. In the final phase, the boxer visibly pulls away toward the left while the referee remains behind, and the centroid distance rises to about 0.17 at frame 31. Thus, the closest available description is that they first move closer together and then move farther apart.</p></div>
+      <div class="rseg ans"><span class="tag">answer · a</span><p><code>&lt;answer&gt;</code><b>B</b><code>&lt;/answer&gt;</code></p></div>
+      <button type="button" class="more" id="resp-more" aria-controls="resp" aria-expanded="false">Show full response</button>
+    </div>
+
+
+    <figure class="fig">
+      <img src="static/images/main_fig.jpg" alt="Trace4D pipeline: QA generation from frozen geometry models, GPT-generated 4D-grounded CoT, and two-stage training with joint SFT and GRPO." width="2000" height="1299" loading="lazy">
+      <figcaption><b>Overview.</b> Reference 4D states from Grounded SAM and Pi3 drive template-based QA construction and teacher-generated CoT. Joint SFT learns state prediction and grounded QA together, then geometry-aware GRPO rewards answer, format, position, displacement, and bounding-box agreement.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h3>Two-stage training</h3>
+      <p><b>Stage 1: Joint SFT.</b> Starting from the base VLM, we train in one mix on 600K perception examples, whose target is the <code>&lt;4d&gt;</code> block alone, and about 70K grounded QA examples, whose target is the full response.</p>
+      <p><b>Stage 2: Geometry-aware GRPO.</b> On about 7K QA examples, the policy is rewarded for the correct answer and for predicted states that agree with the reference: position error per timestep (<i>R</i><sub>pos</sub>), the displacement vector between consecutive timesteps (<i>R</i><sub>Δ</sub>), and box IoU (<i>R</i><sub>bbox</sub>). Reference states are used only to compute rewards. At inference the model sees just the video and the question, with no external geometric model.</p>
+    </div>
+  </section>
+
+  <section id="data" class="wrap">
+    <div class="split">
+      <div class="prose">
+        <div class="eyebrow">Data</div>
+        <h2>Trace4D-Train and Trace4D-Bench</h2>
+        <p>Source videos come from Koala-36M, selected for observable scene or object dynamics. Grounding DINO and SAM 2 track the entities, and Pi3 lifts them to 3D point maps and camera poses. Object centroids are the mean of reconstructed points inside each mask. After box-size checks and a multimodal verifier, the retained tracks become reference 4D states.</p>
+        <p>Questions come in two coordinate conventions. <b>Relative</b> questions use the camera frame at each timestep. <b>Absolute</b> questions use a fixed anchor-camera frame, so motion can be compared over time. The held-out <b>Trace4D-Bench</b> has 1,200 questions, 100 for each of 12 types. Splits are made at the source-video level, so no benchmark source is used in SFT, GRPO, or any ablation.</p>
+      </div>
+      <figure>
+        <img src="static/images/annotation_example.jpg" alt="Reference annotation example: two entities tracked across four frames with bounding boxes and 3D centroids." width="2000" height="1501" loading="lazy">
+        <figcaption><b>Example of 4D reference annotations.</b> Colored boxes identify the same two entities across four frames; labels report their bounding-box coordinates and 3D centroids.</figcaption>
+      </figure>
+    </div>
+    <figure class="fig">
+      <img src="static/images/data_stats.jpg" alt="Dataset statistics: dynamics distribution, question-type distribution, and mean reasoning length by question type." width="2228" height="734" loading="lazy">
+      <figcaption><b>Dataset statistics.</b> (a) Joint distribution of object and camera dynamics. (b) Question-type proportions for relative and absolute QA. (c) Mean reasoning token counts by question type.</figcaption>
+    </figure>
+  </section>
+
+  <section id="results" class="wrap">
+    <div class="prose" style="max-width: var(--wide)">
+      <div class="eyebrow">Results</div>
+      <h2>Trace4D-Bench and VLM4D</h2>
+      <p class="note">Multiple-choice accuracy (%). Open-source models decoded greedily.</p>
+
+      <h3>Trace4D-Bench, per question type</h3>
+      <p>Trace4D improves on its Qwen3-VL-4B-Instruct base model by 40.33 points and beats every evaluated baseline on all 12 question types.</p>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr><th rowspan="2">Model</th><th colspan="7">Relative</th><th colspan="7">Absolute</th><th rowspan="2" class="avg">Overall</th></tr>
+            <tr><th>Spd</th><th>Spd Comp</th><th>Dist<sub>Cam</sub></th><th>Dist<sub>Obj</sub></th><th>Dir<sub>Cam</sub></th><th>Dir<sub>Obj</sub></th><th class="avg">Avg.</th><th>Spd</th><th>Spd Comp</th><th>Dist<sub>Cam</sub></th><th>Dir<sub>Cam</sub></th><th>Dir<sub>Obj</sub></th><th>Motion</th><th class="avg">Avg.</th></tr>
+          </thead>
+          <tbody id="main-body"></tbody>
+        </table>
+      </div>
+      <details class="full" id="full-toggle"><summary>Show all baselines</summary></details>
+    </div>
+
+    <div class="mini" style="margin-top:34px">
+      <div>
+        <h3 style="margin-top:0">VLM4D</h3>
+        <p>On VLM4D's real and synthetic videos, Trace4D ranks first among non-proprietary models, 8.92 points above its Qwen3-VL-4B-Instruct base model. Most of the gain comes from the synthetic split.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Model</th><th>Syn.</th><th>Real</th><th class="avg">Avg.</th></tr></thead>
+            <tbody>
+              <tr class="grp"><td colspan="4">Proprietary</td></tr>
+              <tr><td>GPT-4o</td><td>54.38</td><td>56.02</td><td class="avg">55.62</td></tr>
+              <tr><td>GPT-5</td><td>62.70</td><td>74.69</td><td class="avg">71.75</td></tr>
+              <tr class="grp"><td colspan="4">Open source</td></tr>
+              <tr><td>Qwen3-VL-4B-Instruct</td><td>48.76</td><td>57.55</td><td class="avg">55.40</td></tr>
+              <tr><td>Qwen3-VL-8B-Instruct</td><td><u class="second">55.73</u></td><td><u class="second">60.25</u></td><td class="avg">59.14</td></tr>
+              <tr><td>VG-LLM-8B</td><td>34.83</td><td>48.87</td><td class="avg">45.43</td></tr>
+              <tr><td>VLM-3R-7B</td><td>35.28</td><td>52.88</td><td class="avg">48.57</td></tr>
+              <tr><td>MLLM-4D-8B</td><td>55.05</td><td><b class="best">63.09</b></td><td class="avg"><u class="second">61.12</u></td></tr>
+              <tr><td>GSM-7B</td><td>50.11</td><td>47.56</td><td class="avg">48.18</td></tr>
+              <tr><td>4DThinker-3B</td><td>24.72</td><td>38.95</td><td class="avg">35.46</td></tr>
+              <tr class="ours"><td>Trace4D (Qwen3-VL-4B-Instruct)</td><td><b class="best">77.30</b></td><td>60.10</td><td class="avg"><b class="best">64.32</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Bold and underline mark the best and second-best non-proprietary scores.</p>
+      </div>
+      <div>
+        <h3 style="margin-top:0">Predicted states</h3>
+        <p>We evaluated the final 4B model's own <code>&lt;4d&gt;</code> output on all 1,200 benchmark questions. Errors are larger in the Absolute setting, where objects must be placed in one fixed scene frame.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Setting</th><th>IoU ↑</th><th>Centroid err. ↓</th><th>Traj. L2 ↓</th></tr></thead>
+            <tbody>
+              <tr><td>Relative</td><td>0.7556</td><td>0.0994</td><td>0.0852</td></tr>
+              <tr><td>Absolute</td><td>0.7176</td><td>0.2654</td><td>0.1428</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:16px">Better states go with better answers. Grouping responses into thirds by trajectory error:</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>QA acc. (%)</th><th>Low L2</th><th>Mid L2</th><th>High L2</th></tr></thead>
+            <tbody>
+              <tr><td>Relative</td><td>89.90</td><td>81.37</td><td>71.72</td></tr>
+              <tr><td>Absolute</td><td>91.92</td><td>75.00</td><td>65.66</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="citation" class="wrap">
+    <div class="prose">
+      <h2>Citation</h2>
+      <div class="bib">
+        <button type="button" class="copy" id="copy-bib">Copy</button>
+<pre id="bibtex">@article{trace4d2026,
+  title   = {Trace4D: Grounding Video Reasoning in Predicted
+             4D State Changes and Temporal Visual Evidence},
+  author  = {Jang, Wooseok and Kim, Seungryong and Lu, Yan and Ji, Lei},
+  journal = {arXiv preprint},
+  year    = {2026}
+}</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>Page template inspired by <a href="https://nerfies.github.io/">Nerfies</a> and <a href="https://cvlab-kaist.github.io/GLD/">GLD</a>.</p>
+</footer>
+
+<script>
+(function () {
+  /* ---- main table ---- */
+  var G = "grp";
+  var ROWS = [
+    [G, "Proprietary"],
+    ["GPT-4o", 33,32,21,13,47,32,29.67, 31,32,36,38,35,54,37.67, 33.67],
+    ["GPT-5", 32,37,58,47,68,54,49.33, 35,36,50,40,43,60,44.00, 46.67],
+    [G, "General VLMs"],
+    ["Qwen2.5-VL-3B", 40,47,25,35,21,22,31.67, 42,49,31,24,29,33,34.67, 33.17, 1],
+    ["Qwen3-VL-4B-Instruct", 26,38,30,41,41,53,38.17, 29,33,41,38,47,50,39.67, 38.92],
+    ["Qwen2.5-VL-7B", 39,48,32,26,40,32,36.17, 33,40,35,49,26,55,39.67, 37.92, 1],
+    ["Qwen3-VL-8B-Instruct", 32,43,36,31,55,44,40.17, 37,41,31,49,39,55,42.00, 41.08],
+    ["InternVL2.5-4B", 27,41,21,30,35,46,33.33, 39,41,24,37,40,36,36.17, 34.75, 1],
+    ["InternVL3.5-4B", 41,43,30,43,40,39,39.33, 42,36,37,41,42,46,40.67, 40.00, 1],
+    ["InternVL2.5-8B", 41,38,43,38,49,37,41.00, 39,37,28,50,37,42,38.83, 39.92, 1],
+    ["InternVL3.5-8B", 34,45,33,32,33,48,37.50, 37,39,28,50,37,55,41.00, 39.25, 1],
+    ["LLaVA-OneVision1.5-4B", 30,43,26,29,34,42,34.00, 22,35,29,38,54,43,36.83, 35.42, 1],
+    ["LLaVA-OneVision1.5-8B", 25,38,20,30,31,48,32.00, 21,32,26,34,41,52,34.33, 33.17, 1],
+    [G, "3D/4D specialized"],
+    ["VG-LLM-8B", 39,45,36,43,87,18,44.67, 44,47,38,91,25,44,48.17, 46.42],
+    ["VLM-3R-7B", 40,45,27,38,32,21,33.83, 40,46,32,44,31,51,40.67, 37.25, 1],
+    ["MLLM-4D-8B", 35,43,51,46,69,41,47.50, 34,50,41,62,31,61,46.50, 47.00],
+    ["GSM-7B", 43,45,33,34,74,28,42.83, 42,46,33,77,30,47,45.83, 44.33],
+    ["4DThinker-3B", 43,42,61,52,32,34,44.00, 50,37,56,41,29,26,39.83, 41.92],
+    ["ours", "Trace4D (Qwen3-VL-4B-Instruct)", 79,71,85,61,97,93,81.00, 73,59,75,95,93,70,77.50, 79.25]
+  ];
+  var AVG = { 6: 1, 13: 1, 14: 1 };
+  var nums = ROWS.filter(function (r) { return r[0] !== G; }).map(function (r) { return r[0] === "ours" ? r.slice(2, 17) : r.slice(1, 16); });
+  var best = [];
+  for (var c = 0; c < 15; c++) best[c] = Math.max.apply(null, nums.map(function (r) { return r[c]; }));
+  function fmt(v, c) { return (AVG[c] ? v.toFixed(2) : v.toFixed(1)); }
+  var html = ROWS.map(function (r) {
+    if (r[0] === G) return '<tr class="grp' + (r[2] ? ' extra' : '') + '"' + (r[2] ? ' hidden' : '') + '><td colspan="16">' + r[1] + '</td></tr>';
+    var ours = r[0] === "ours", name = ours ? r[1] : r[0], v = ours ? r.slice(2, 17) : r.slice(1, 16), extra = !ours && r[16];
+    return '<tr class="' + (ours ? 'ours' : '') + (extra ? ' extra' : '') + '"' + (extra ? ' hidden' : '') + '><td>' + name + '</td>' +
+      v.map(function (x, c) { var s = fmt(x, c); if (x === best[c]) s = '<b class="best">' + s + '</b>'; return '<td' + (AVG[c] ? ' class="avg"' : '') + '>' + s + '</td>'; }).join("") + '</tr>';
+  }).join("");
+  document.getElementById("main-body").innerHTML = html;
+  var det = document.getElementById("full-toggle");
+  det.addEventListener("toggle", function () {
+    document.querySelectorAll("#main-body tr.extra").forEach(function (tr) { tr.hidden = !det.open; });
+    det.querySelector("summary").textContent = det.open ? "Show fewer baselines" : "Show all baselines";
+  });
+
+  /* ---- full response: show more / less ---- */
+  var resp = document.getElementById("resp"), more = document.getElementById("resp-more");
+  more.addEventListener("click", function () {
+    var open = resp.classList.toggle("collapsed") === false;
+    more.setAttribute("aria-expanded", open);
+    more.textContent = open ? "Show less" : "Show full response";
+  });
+
+  /* ---- videos: respect reduced motion, play only when visible ---- */
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var vids = document.querySelectorAll("video");
+  vids.forEach(function (v) {
+    if (reduce) { v.removeAttribute("autoplay"); v.pause(); v.controls = true; }
+  });
+  if (!reduce && "IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { var p = e.target.play(); if (p && p.catch) p.catch(function () {}); } else e.target.pause(); });
+    }, { threshold: 0.2 });
+    vids.forEach(function (v) { io.observe(v); });
+  }
+
+  /* ---- bibtex copy ---- */
+  var cb = document.getElementById("copy-bib");
+  cb.addEventListener("click", function () {
+    var txt = document.getElementById("bibtex").textContent;
+    function done() { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1500); }
+    function fallback() { var r = document.createRange(); r.selectNodeContents(document.getElementById("bibtex")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); cb.textContent = "Press Ctrl+C"; }
+    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+  });
+})();
+</script>
+
+</body></html>
